@@ -1,0 +1,61 @@
+from dataclasses import dataclass,field
+from enum import IntEnum
+import glob
+from os import PathLike,path
+from calibre.library import db as db_api
+
+@dataclass
+class book_info:
+    book_id:int
+    title:str
+    authors:list[str]
+
+class BackupStatus(IntEnum):
+    Initial = 0
+    Pending = 1
+    Write = 3
+    Overwrite = 4
+    Skip = 5
+
+@dataclass
+class BackupTask(book_info):
+    # The target path
+    backup_path: PathLike
+    # Detected paths containing existing backups. Can be set later
+    ext_paths: list[PathLike] = field(default_factory=list)
+    # Task Status
+    status: BackupStatus = BackupStatus.Initial
+    unique: bool = True
+    def __post_init__(self):
+        DN = f'{self.book_id}_{self.title}' if any(self.authors == a for a in ['','Unknown']) else f'{self.book_id}_{self.title} [{', '.join(self.authors)}]'
+        self.backup_path = path.abspath(path.join(self.backup_path, DN + '.jpg'))
+
+@dataclass
+class session_base:
+    # Actual session info
+    ids: list[int]
+    db: db_api
+    backup_path: PathLike
+    # Returns dict of {id: [library_path,backup_file,title,authors]}
+    def process(self,*,abort=None,log=None,notifications=None):
+        raise NotImplemented('Must be implemented in subclass!')
+    
+    def get_books(self):
+        paths = self.db.all_field_for('path',self.ids)
+        titles = self.db.all_field_for('title',self.ids)
+        authors = self.db.all_field_for('authors',self.ids)
+        return [BackupTask(bid,titles[bid],authors[bid],self.backup_path) for bid in self.ids]
+    def check_conflict(self,book):
+        '''
+        Conflicts to handle:
+            i) A backup cover of the same filename exists
+            ii) A backup cover of the same id but different filename exists
+        Subclasses should override this method, call super().check_conflict(), and execute based on its result.
+        Returns OK,[Conflicting Paths]
+        '''
+        existing_paths = glob.glob(f'{book.book_id}_*.jpg',root_dir=self.backup_path)
+        return len(existing_paths) == 0, [path.join(self.backup_path,p) for p in existing_paths]
+    def write_backup(self,book,path,existing=[]):
+        self.db.copy_cover_to(book.book_id,book.backup_path)
+        for p in existing:
+            remove(p)
