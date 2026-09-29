@@ -2,6 +2,7 @@
 from calibre.customize import InterfaceActionBase
 from calibre.utils.config import prefs
 from calibre.library import db,current_library_path
+from calibre_plugins.cover_backup.config import prefs as plugin_prefs
 from calibre_plugins.cover_backup.base.backup import backup_noninteractive
 from calibre_plugins.cover_backup.base.restore import restore_noninteractive
 from os import path
@@ -52,12 +53,19 @@ class DemoPlugin(InterfaceActionBase):
         return self.__class__.BackupStatus
 
     def cli_main(self,args):
-        parser = argp.ArgumentParser(prog='Hello world plugin', description='Hellos your world')
-        parser.add_argument('-l','--library',help='Path to library folder. Set to last used library by default', action='store',default=prefs.get("library_path"))
-        parser.add_argument('mode',help='Create or Restore Backup(s)',choices=['backup','restore'])
-        parser.add_argument('ids',help='The ID(s) of books we are operating on.',nargs='+',type=int)
-        parser.add_argument('-o', '--overwrite', help='Overwrite existing backups instead of skipping them.', action='store_true',dest='ow_mode')
-        parser.add_argument('-p', '--backup-path', help='Path where backups are stored', default=path.expanduser('~/Pictures/Covers'))
+        parser = argp.ArgumentParser(prog='Cover Backup Plugin', description='Creates and restores book cover image backups.')
+        parser.add_argument('-l','--library',help='Path to library folder. Set to last used library by default', action='store', default=prefs.get("library_path"))
+        parser.add_argument('-p', '--backup-path', help='Path where backups are stored', default=plugin_prefs['backup_path'])
+        sp = parser.add_subparsers(help='subcommand help', dest='mode', metavar='{b[ackup],r[estore]}',required=True)
+        make_aliases = lambda s: [] if len(s) <= 1 else [s[:-1]] + make_aliases(s[:-1])
+        backup = sp.add_parser('backup',aliases=make_aliases('backup'),help='restore help')
+        restore = sp.add_parser('restore',aliases=make_aliases('restore'),help='backup help')
+        parser.add_argument('ids',help='The ID(s) of books we are operating on.', type=int, action='extend',nargs=1)
+        #parser.add_argument('mode',help='Create or Restore Backup(s)',choices=['backup','restore'])
+        backup.add_argument('-o', '--overwrite', help='Overwrite existing backups instead of skipping them.', action='store_true',dest='ow_mode')
+        restore.add_argument('-d','--delete',help='Delete backups after they are restored.', action='store_true',dest='ow_mode')
+        backup.add_argument('ids',help='The ID(s) of books we are creating backup(s) for.', type=int, action='extend',nargs='+',metavar=('id','ids'))
+        restore.add_argument('ids',help='The ID(s) of books we are restoring backup(s) for.', type=int, action='extend',nargs='+',metavar=('id','ids'))
         print(f'Called with {args}') 
         argv = parser.parse_args(args[1:])
         #leg = db(argv.library)
