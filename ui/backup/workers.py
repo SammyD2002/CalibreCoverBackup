@@ -3,10 +3,23 @@ ConflictHandler: Validates tasks and triggers conflict dialogs before forwarding
 BackupWriter: Write/Skip covers.
 '''
 from calibre_plugins.cover_backup.base import BackupStatus,BackupTask
-from calibre_plugins.cover_backup.ui import PromptRequest,PromptResponse
+from dataclasses import dataclass
 from qt.core import (QObject,pyqtSignal)
 from queue import Queue,Empty,ShutDown
 from os import path
+
+@dataclass
+class PromptRequest:
+    book: BackupTask
+    is_last: bool
+    multi: bool
+
+@dataclass
+class PromptResponse:
+    book_id: int|None # The id of the book in question
+    overwrite: bool # The result (whether to overwrite or not)
+
+
 # Checks for path conflicts before forwarding book to BackupWriter.
 # If conflict is found, mark as in progress and allow BackupWriter to recieve resolved signal.
 class ConflictHandler(QObject):

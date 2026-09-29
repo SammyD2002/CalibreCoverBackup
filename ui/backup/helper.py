@@ -1,6 +1,5 @@
 from calibre_plugins.cover_backup.base import BackupStatus,BackupTask
-from calibre_plugins.cover_backup.ui import PromptRequest,PromptResponse
-from calibre_plugins.cover_backup.ui.backup_proc import ConflictHandler,BackupWriter
+from calibre_plugins.cover_backup.ui.backup.workers import ConflictHandler,BackupWriter,PromptRequest,PromptResponse
 from calibre.constants import DEBUG
 from os import path,remove
 from qt.core import (Qt,QObject,pyqtSignal)

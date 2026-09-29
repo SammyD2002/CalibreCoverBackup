@@ -2,7 +2,8 @@
 from calibre.customize import InterfaceActionBase
 from calibre.utils.config import prefs
 from calibre.library import db,current_library_path
-from calibre_plugins.cover_backup.base.session import session_noninteractive
+from calibre_plugins.cover_backup.base.backup import backup_noninteractive
+from calibre_plugins.cover_backup.base.restore import restore_noninteractive
 from os import path
 import argparse as argp
 class DemoPlugin(InterfaceActionBase):
@@ -65,8 +66,9 @@ class DemoPlugin(InterfaceActionBase):
         #print(api)
         api.init()
         api.reload_from_db()
-        s = session_noninteractive(db=api,ids=argv.ids,ow_mode=argv.ow_mode,backup_path=argv.backup_path)
-        session_noninteractive.process(s)
+        cs = backup_noninteractive if argv.mode == 'backup' else restore_noninteractive
+        s = cs(db=api,ids=argv.ids,ow_mode=argv.ow_mode,backup_path=argv.backup_path) 
+        cs.process(s)
         '''
         with api.safe_read_lock as l:
             print(f'Library Path: {argv.library}')

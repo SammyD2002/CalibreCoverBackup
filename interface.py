@@ -1,5 +1,6 @@
 from calibre.gui2.actions import InterfaceAction
-from calibre_plugins.cover_backup.ui.session import session_interactive
+from calibre_plugins.cover_backup.ui.backup import backup_interactive
+from calibre_plugins.cover_backup.base.restore import restore_noninteractive
 from calibre.gui2.threaded_jobs import ThreadedJob
 from PyQt6.QtCore import QThread
 import traceback
@@ -32,14 +33,21 @@ class CoverBackupPlugin(InterfaceAction):
         # Create and connect restore action to start_restore()
         self.restore = self.create_menu_action(self.qaction.menu(),'smfincher.cover_restore', 'Restore Cover(s)',triggered=self.start_restore)
         # Connect configure action to configure()
+    def __job_finished(self,j,ids,prev):
+        print(f'Finished restoring {ids}')
+        current = self.gui.library_view.currentIndex()
+        self.gui.library_view.model().refresh_ids(ids)
+        if self.gui.cover_flow: self.gui.cover_flow.dataChanged()
+        self.gui.library_view.model().current_changed(current, prev)
+
     def start_backup(self):
         ids = self.gui.library_view.get_selected_ids()
         db = self.gui.current_db.new_api # Get current db
         print('t1:',int(QThread.currentThreadId()))
-        session = session_interactive(ids,db, self.backup_path, self.gui) # Create session object
+        session = backup_interactive(ids,db, self.backup_path, self.gui) # Create session object
         session.destroyed.connect(self.db_session_destroyed) # Debug that ensured a session object is actually destroyed.
         job = ThreadedJob('cover_backup','Back up the covers of the selected books.',
-            suppress(session_interactive.process),
+            suppress(backup_interactive.process),
             [session],
             dict(), lambda j:j) # Create job object
         self.gui.job_manager.run_threaded_job(job) # Start job
@@ -49,6 +57,13 @@ class CoverBackupPlugin(InterfaceAction):
 
     def start_restore(self):
         ids = self.gui.library_view.get_selected_ids()
+        api = self.gui.current_db.new_api
+        session = restore_noninteractive(db=api,ids=ids,ow_mode=False,backup_path=self.backup_path) 
+        job = ThreadedJob('cover_backup','Back up the covers of the selected books.',
+            suppress(restore_noninteractive.process),
+            [session],
+            dict(), lambda j,prev=self.gui.library_view.currentIndex():self.__job_finished(j,ids,prev)) # Create job object
+        self.gui.job_manager.run_threaded_job(job) # Start job
 
     def apply_settings(self):
         from calibre_plugins.cover_backup.config import prefs

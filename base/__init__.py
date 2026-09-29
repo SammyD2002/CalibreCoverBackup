@@ -1,8 +1,38 @@
 from dataclasses import dataclass,field
 from enum import IntEnum
 import glob
-from os import PathLike,path
+from os import PathLike,path,remove
 from calibre.library import db as db_api
+import logging
+'''
+Helper used to wrap log for testing.
+'''
+def wrap_log(fn):
+	class ndummy:
+		def __init__(self,log):
+			self.log = log
+		def put(self,msg,block=True,timeout=None):
+			self.log.info(f'[{msg[0] * 100}%]: {msg[1]}')
+		def put_nowait(self,msg):
+			self.put(msg,False,None)
+	class adummy:
+		def __init__(self,log):
+			self.log = log
+		def isSet(self):
+			return False
+		def set(self):
+			raise RuntimeError('Abort set!')
+	def wrapper(*args,**kwargs):
+		l = kwargs.get('log')
+		if l is None:
+			logger = logging.getLogger(__name__)
+			logging.basicConfig(level=logging.DEBUG)
+			l = kwargs.setdefault('log',logger)
+		if kwargs.get('notifications') is None: kwargs.setdefault('notifications',ndummy(l))
+		if kwargs.get('abort') is None: kwargs.setdefault('abort',adummy(l))
+		fn(*args,**kwargs)
+	return wrapper
+
 
 @dataclass
 class book_info:
@@ -52,14 +82,15 @@ class session_base:
             i) A backup cover of the same filename exists
             ii) A backup cover of the same id but different filename exists
         Subclasses should override this method, call super().check_conflict(), and execute based on its result.
-        Returns OK,[Conflicting Paths]
+        Returns isConflicting,[Conflicting Paths]
         '''
         existing_paths = glob.glob(f'{book.book_id}_*.jpg',root_dir=self.backup_path)
-        return len(existing_paths) == 0, [path.join(self.backup_path,p) for p in existing_paths]
+        return len(existing_paths) > 0, [path.join(self.backup_path,p) for p in existing_paths]
     def write_backup(self,book,path,existing=[]):
         self.db.copy_cover_to(book.book_id,book.backup_path)
         for p in existing: 
-    def restore_backup(self,book,src):
-        # Set the book cover
-        self.db.set_cover({book.book_id: src})
             remove(p)
+    def restore_backup(self,book,paths):
+        # Set the book cover
+        with open(paths[0],'rb') as src: self.db.set_cover({book.book_id: src})
+        if self.ow_mode == True: remove(paths[0])

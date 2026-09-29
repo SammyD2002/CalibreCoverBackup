@@ -1,12 +1,13 @@
 from calibre_plugins.cover_backup.base import book_info,BackupStatus,BackupTask,session_base
-from calibre_plugins.cover_backup.ui import PromptRequest,PromptResponse
-from calibre_plugins.cover_backup.ui.main import Helper
+from calibre_plugins.cover_backup.base.backup import session_backup
+from calibre_plugins.cover_backup.ui.backup.workers import PromptRequest,PromptResponse
+from calibre_plugins.cover_backup.ui.backup.helper import Helper
 from qt.core import (Qt,sip,QObject,pyqtSignal,QMessageBox,QEventLoop,QCoreApplication,QEvent)
 from queue import Queue,Empty,ShutDown
 from typing import override
 
 # The session interactive object replaces the gui connector object.
-class session_interactive(session_base,QObject):
+class backup_interactive(session_backup,QObject):
     '''
     # Actual session info
     ids: list[int]
@@ -28,7 +29,7 @@ class session_interactive(session_base,QObject):
     aborted = pyqtSignal(int)
     def __init__(self,ids,db,backup_path,parent=None):
         # Run parent constructors
-        session_base.__init__(self,ids,db,backup_path)
+        session_backup.__init__(self,ids,db,backup_path)
         QObject.__init__(self,parent)
         # Set helpers used to structure ui.
         self.multi = len(ids) > 0
@@ -66,6 +67,7 @@ class session_interactive(session_base,QObject):
         '''
         print('Calling super...')
         book.unique,book.ext_paths = session_base.check_conflict(self,book)
+        book.unique = not book.unique
         print('Setting status if ok...')
         book.status = BackupStatus.Overwrite if book.unique else BackupStatus.Pending
         #print(f'Checked conflict, got {ok},{paths}')
