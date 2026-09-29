@@ -53,6 +53,7 @@ class DemoPlugin(InterfaceActionBase):
     def cli_main(self,args):
         parser = argp.ArgumentParser(prog='Hello world plugin', description='Hellos your world')
         parser.add_argument('-l','--library',help='Path to library folder. Set to last used library by default', action='store',default=prefs.get("library_path"))
+        parser.add_argument('mode',help='Create or Restore Backup(s)',choices=['backup','restore'])
         parser.add_argument('ids',help='The ID(s) of books we are operating on.',nargs='+',type=int)
         parser.add_argument('-o', '--overwrite', help='Overwrite existing backups instead of skipping them.', action='store_true',dest='ow_mode')
         parser.add_argument('-p', '--backup-path', help='Path where backups are stored', default=path.expanduser('~/Pictures/Covers'))

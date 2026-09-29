@@ -36,6 +36,7 @@ class session_base:
     ids: list[int]
     db: db_api
     backup_path: PathLike
+    ow_mode: bool|None = None
     # Returns dict of {id: [library_path,backup_file,title,authors]}
     def process(self,*,abort=None,log=None,notifications=None):
         raise NotImplemented('Must be implemented in subclass!')
@@ -57,5 +58,8 @@ class session_base:
         return len(existing_paths) == 0, [path.join(self.backup_path,p) for p in existing_paths]
     def write_backup(self,book,path,existing=[]):
         self.db.copy_cover_to(book.book_id,book.backup_path)
-        for p in existing:
+        for p in existing: 
+    def restore_backup(self,book,src):
+        # Set the book cover
+        self.db.set_cover({book.book_id: src})
             remove(p)
