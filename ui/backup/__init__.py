@@ -1,11 +1,12 @@
 from calibre_plugins.cover_backup.base import book_info,BackupStatus,BackupTask,session_base
 from calibre_plugins.cover_backup.base.backup import session_backup
+from calibre_plugins.cover_backup.ui.backup.dialog import BackupDialog,MultiBackupDialog,GlobalChoice
 from calibre_plugins.cover_backup.ui.backup.workers import PromptRequest,PromptResponse
 from calibre_plugins.cover_backup.ui.backup.helper import Helper
-from qt.core import (Qt,sip,QObject,pyqtSignal,QMessageBox,QEventLoop,QCoreApplication,QEvent)
+import threading
+from qt.core import (Qt,QCheckBox,QWidget,QComboBox,QHBoxLayout,sip,QObject,pyqtSignal,QDialog,QMessageBox,QDialogButtonBox,QEventLoop,QCoreApplication,QEvent,QPushButton,QVBoxLayout,QLabel,QButtonGroup)
 from queue import Queue,Empty,ShutDown
 from typing import override
-
 # The session interactive object replaces the gui connector object.
 class backup_interactive(session_backup,QObject):
     '''
@@ -22,6 +23,7 @@ class backup_interactive(session_backup,QObject):
     def check_conflict(self,book)
     def write_backup(self,book,path,existing=[])
     '''
+    __getNext = pyqtSignal()
     book_ready = pyqtSignal()
     reached_resolution = pyqtSignal(PromptResponse)
     global_resolution = pyqtSignal(PromptResponse)
@@ -34,26 +36,26 @@ class backup_interactive(session_backup,QObject):
         # Set helpers used to structure ui.
         self.multi = len(ids) > 0
         self.last = ids[-1]
-        #super(session_base,self).__init__(ids,db,backup_path)
-        #super(QObject,self).__init__(parent)
-        # Initialize member variables
-        self.box = QMessageBox()
-        self.box.setModal(True)
         self.current = None
         self.queue = Queue()
         # Connect Signals
-        self.box.buttonClicked.connect(self.__finish_prompt)
         self.book_ready.connect(self.__make_prompt, Qt.ConnectionType.QueuedConnection)
         self.global_resolution.connect(self.early_exit)
-        self.aborted.connect(self.early_exit)
-        #self.destroyed.connect(self.printDestroyed)
+        self.reached_resolution.connect(self.__getNext)
+        self.complete.connect(self.deleteLater,Qt.ConnectionType.QueuedConnection)
+        self.complete.connect(lambda: print('Completed session!'))
+        self.aborted.connect(lambda: print('EXITTED SESSION EARLY!'))
     def printDestroyed(self):
         print('Session Object was destroyed!')
+    def abort(self):
+        self.early_exit()
+        self.aborted.emit(0)
     #@pyqtSlot()
     def early_exit(self):
         print('Got early exit.')
+        #self.aborted.emit(0)
         self.queue.shutdown(True)
-        # early_exit is only called from signal emitted by __finish_prompt here. Therefore, getResolution will always be called after and handled.
+        self.__getNext.emit()
     #@pyqtSlot()
     def allInitialized(self):
         self.queue.shutdown()
@@ -61,10 +63,6 @@ class backup_interactive(session_backup,QObject):
     
     @override
     def check_conflict(self,book,*,processed=None,conflicts=None):
-        '''
-        Checks conflict; Triggers queued signal for gui if found.
-        Run in worker thread, but queued signal run in main thread.
-        '''
         print('Calling super...')
         book.unique,book.ext_paths = session_base.check_conflict(self,book)
         book.unique = not book.unique
@@ -75,24 +73,13 @@ class backup_interactive(session_backup,QObject):
         if processed is not None: processed.emit(book)
         if not book.unique and conflicts is not None: conflicts.emit(PromptRequest(book,book.book_id == self.last,self.multi))
         return book.unique,book.ext_paths
-    #@pyqtSlot()
-    def __make_prompt(self):
-        question = f"{self.current.book.title}, by {', '.join(self.current.book.authors)} has existing backup(s). Replace them?"
-        paths = "\t'" + "'\n\t'".join(self.current.book.ext_paths) + "'"
-        self.box.setText(f'{question}\n{paths}')
-        self.box.setWindowTitle(f'"{self.current.book.title}" Backup Conflict')
-        #self.box.setText(f"Overwrite Existing Backup for {book_title} at {paths}?")
-        BUTTONS = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        if (not self.current.is_last) and self.current.multi: BUTTONS |= QMessageBox.StandardButton.YesToAll | QMessageBox.StandardButton.NoToAll | QMessageBox.StandardButton.Cancel
-        self.box.setStandardButtons(BUTTONS)
-        self.box.open()
     # Slot to enqueue conflict request
-    #@pyqtSlot(BackupTask|None)
     def getResolution(self,t=None):
         print("Getting next conflict with current =",self.current)
+        was_free = self.current is None
         try:
             # If current is none, try to get from queue.
-            if self.current is None:
+            if was_free:
                 self.current = self.queue.get_nowait()
             # If successful, or if current is set, put t into the queue if it is not None.
             if t is not None: self.queue.put(t)
@@ -104,29 +91,30 @@ class backup_interactive(session_backup,QObject):
             print("Caught ShutDown")
             self.complete.emit()
             return
-        if self.current is not None: self.book_ready.emit()
-    #@pyqtSlot()
-    def __finish_prompt(self,button):
+        if was_free: self.book_ready.emit()
+    def __make_prompt(self):
+        d = MultiBackupDialog(self.parent()) if (multi := (len(self.current.book.ext_paths)) > 1) else BackupDialog(self.parent())
+        if multi: args = (self.db, self.current, (not self.current.is_last) and self.current.multi)
+        else: args = (self.current, (not self.current.is_last) and self.current.multi)
+        d.resolved.connect(self.__finish_prompt)
+        self.aborted.connect(d.reject)
+        d.finished.connect(d.deleteLater)
+        self.destroyed.connect(d.deleteLater)
+        d.startPrompt(*args)
+    def __finish_prompt(self,result,resolution=None):
         signal = self.reached_resolution
         response = 0
-        try:  
-            match(self.box.buttonRole(button)):
-                case QMessageBox.ButtonRole.InvalidRole: raise ValueError("Reported button does not exist on dialog.")
-                case QMessageBox.ButtonRole.YesRole:
-                    response = PromptResponse(self.current.book.book_id,True)
-                    if button == self.box.button(QMessageBox.StandardButton.YesToAll): signal = self.global_resolution
-                case QMessageBox.ButtonRole.NoRole: 
-                    response = PromptResponse(self.current.book.book_id,False)
-                    if button == self.box.button(QMessageBox.StandardButton.NoToAll): signal = self.global_resolution
-                case QMessageBox.ButtonRole.RejectRole: signal = self.aborted # Set abort event in thread here. raise GeneratorExit("Canceled.")
+        try:
+            response = PromptResponse(self.current.book.book_id,resolution.action)
+            if result == QDialog.DialogCode.Rejected: self.queue.shutdown(True)
+            elif resolution.scope != GlobalChoice.NoGlobal: signal = self.global_resolution
+            signal.emit(response)
         except:
             # Set response to error code
             #self.__handle_error()
             raise
-        finally:
-            self.current = None
-            signal.emit(response)
         print('Sent prompt response, calling getResolution()...')
+        self.current = None
         self.getResolution() 
     # Override of process
     @staticmethod
@@ -134,24 +122,30 @@ class backup_interactive(session_backup,QObject):
         '''
         Start event loop in seperate thread
         '''
+        log.debug(f'Running job on thread{threading.get_ident()},{threading.get_native_id()}...')
         log.info(f'Processing Book(s) {",".join([str(i) for i in session.ids])}...')
         l = QEventLoop(None)
-        h = Helper(session,l,notifications,log)
+        h = Helper(session,l,notifications,log,abort)
+        wr = h.writer
+        ch = h.handler
         h.books += session.get_books()
-        #h.all_started.connect(lambda : print('t2:',int(QThread.currentThreadId())), Qt.ConnectionType.QueuedConnection)
-        #h.done.connect(session.parent().exit,Qt.ConnectionType.QueuedConnection)
-        #l.destroyed.connect(session.deleteLater,Qt.ConnectionType.QueuedConnection)
         h.prepare()
-        # When h is complete, make the event loop exit.
+        # When h is complete, or when early exit, make the event loop exit.
         h.destroyed.connect(l.exit)
+        #session.aborted.connect(l.exit)
         #sleep(10)
+        print('Loop STARTED!')
         res = l.exec()
+        print('Loop FINISHED!')
         # Queue and process deferred event loop deletion.
         l.deleteLater()
         QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
         # Warn if loop or helper still exists.
+        if not sip.isdeleted(wr): log.warn('BackupWriter still exists!')
+        if not sip.isdeleted(ch): log.warn('ConflictHandler still exists!')
         if not sip.isdeleted(h): log.warn('Helper still exists!')
         if not sip.isdeleted(l): log.warn('Event loop still exists!')
+        log.info('Reached end of worker thread!')
         return res
 
 

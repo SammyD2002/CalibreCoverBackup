@@ -15,24 +15,24 @@ def msuppress(fn):
 class Helper(QObject):
     start_book = pyqtSignal(BackupTask)
     all_started = pyqtSignal()
-    destroySession = pyqtSignal()
+    #destroySession = pyqtSignal()
     done = pyqtSignal()
-    def __init__(self,session,loop,notifications,log):
+    def __init__(self,session,loop,notifications,log,abort):
         QObject.__init__(self,loop)
         self.log = log
         self.notifications = notifications
         self.session = session
         self.deleted_session = False
-        self.handler = ConflictHandler(session,loop)
+        self.handler = ConflictHandler(session,abort,loop)
         self.deleted_handler = False
-        self.writer = BackupWriter(session,loop)
+        self.writer = BackupWriter(session,abort,loop)
         self.deleted_writer = False
         self.start_book.connect(self.handler.processTask,Qt.ConnectionType.QueuedConnection)
-        self.all_started.connect(self.handler.processedAll,Qt.ConnectionType.QueuedConnection)
+        self.all_started.connect(self.handler.finished,Qt.ConnectionType.QueuedConnection)
         self.handler.taskProcessed.connect(self.printStarted)
         self.handler.destroyed.connect(self.ch_destroyed)
         self.session.complete.connect(self.s_complete,Qt.ConnectionType.QueuedConnection)
-        self.destroySession.connect(self.session.deleteLater, Qt.ConnectionType.QueuedConnection)
+        #self.destroySession.connect(self.session.deleteLater, Qt.ConnectionType.QueuedConnection)
         self.session.destroyed.connect(self.log_s_destroyed,Qt.ConnectionType.DirectConnection)
         self.writer.destroyed.connect(self.bw_destroyed)
         #self.destroyed.connect(self.h_destroyed)
@@ -42,35 +42,51 @@ class Helper(QObject):
         self.written = []
         self.skipped = []
     def prepare_signals(self):
+        self.__preparePrintSignals()
         self.__prepareHelperSignals()
         self.__prepareHandlerSessionSignals()
         self.__prepareHandlerWriterSignals()
         self.__prepareSessionWriterSignals()
+        # Connect deleteLater to each helpers complete() signal.
+        self.writer.complete.connect(self.handler.deleteLater)
+        self.writer.complete.connect(self.writer.deleteLater)
+        #self.handler.processedAll.connect(self.handler.deleteLater)
+
+    def __preparePrintSignals(self):
+        self.handler.destroyed.connect(lambda: print('HELPER: Conflict Handler Object Destroyed'))
+        self.session.destroyed.connect(lambda: print('HELPER: Session Object Destroyed'),Qt.ConnectionType.DirectConnection)
+        self.writer.destroyed.connect(lambda: print('HELPER: Writer Destroyed!'))
+
     
     def __prepareHelperSignals(self):
         self.writer.skipped.connect(self.printSkipped)
         self.writer.written.connect(self.printWritten)
-        self.writer.complete.connect(self.writer.deleteLater)
-        self.handler.processedAll.connect(self.handler.deleteLater)
-        self.session.aborted.connect(self.printAborted,Qt.ConnectionType.QueuedConnection)
+        #self.handler.processedAll.connect(self.handler.deleteLater)
+        self.writer.aborted.connect(self.printAborted)
         #self.writer.complete.connect(self.quit,Qt.ConnectionType.QueuedConnection)
         self.session.book_ready.connect(self.printPrompt,Qt.ConnectionType.QueuedConnection)
         self.session.reached_resolution.connect(self.promptDone,Qt.ConnectionType.QueuedConnection)
         self.session.global_resolution.connect(self.promptDone,Qt.ConnectionType.QueuedConnection)
         self.session.aborted.connect(self.promptDone,Qt.ConnectionType.QueuedConnection)
+        self.session.aborted.connect(self.abort,Qt.ConnectionType.QueuedConnection)
     
     def __prepareHandlerSessionSignals(self):
         self.handler.needsResolution.connect(self.session.getResolution,Qt.ConnectionType.QueuedConnection)
         self.handler.processedAll.connect(self.session.allInitialized,Qt.ConnectionType.QueuedConnection)
+        self.handler.abortSet.connect(self.session.early_exit,Qt.ConnectionType.QueuedConnection)
+        self.session.aborted.connect(self.handler.deleteLater,Qt.ConnectionType.QueuedConnection)
     
     def __prepareHandlerWriterSignals(self):
         self.handler.taskProcessed.connect(self.writer.enqueue_book,Qt.ConnectionType.QueuedConnection)
         self.handler.processedAll.connect(self.writer.closeQueue,Qt.ConnectionType.QueuedConnection)
     
     def __prepareSessionWriterSignals(self):
+        #self.session.aborted.connect(self.handler.deleteLater,Qt.ConnectionType.QueuedConnection)
         self.session.aborted.connect(self.writer.exitEarly,Qt.ConnectionType.QueuedConnection)
         self.session.reached_resolution.connect(self.writer.update_book,Qt.ConnectionType.QueuedConnection)
         self.session.global_resolution.connect(self.writer.update_global,Qt.ConnectionType.QueuedConnection)
+        self.writer.aborted.connect(self.session.early_exit,Qt.ConnectionType.QueuedConnection)
+
     def ch_destroyed(self):
         self.log.debug('Destroyed Conflict Handler.')
         self.deleted_handler = True
@@ -82,7 +98,7 @@ class Helper(QObject):
     def s_complete(self):
         self.log.debug('Completed session object')
         self.deleted_session = True
-        self.destroySession.emit()
+        #self.destroySession.emit()
         self.__check_del()
     def log_s_destroyed(self):
         self.log.debug('Destroyed session object')
@@ -100,7 +116,10 @@ class Helper(QObject):
         self.logSummary()
         self.deleteLater()
         #self.parent().exit()
-
+    def abort(self):
+        self.writer.abort()
+        self.handler.deleteLater()
+        self.deleteLater()
     def prepare(self):
         self.prepare_signals()
         self.total = len(self.books)
@@ -140,8 +159,8 @@ class Helper(QObject):
 
     
     def printAborted(self,res):
-        self.log.info('Aborted:',res)
-        self.quit()
+        self.log.info('Aborted:',self.__summarize_book(res,processed=False))
+        #self.quit()
         
     def __summarize_book(self,b,*,processed=True,written=True):
         HEADER = f'{b.title} [{b.book_id}]'

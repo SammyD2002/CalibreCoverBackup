@@ -2,6 +2,7 @@ from calibre.gui2.actions import InterfaceAction
 from calibre_plugins.cover_backup.ui.backup import backup_interactive
 from calibre_plugins.cover_backup.base.restore import restore_noninteractive
 from calibre.gui2.threaded_jobs import ThreadedJob
+from qt.core import (pyqtSignal)
 from PyQt6.QtCore import QThread
 import traceback
 # Suppresses exceptions and prints them to log.
@@ -23,6 +24,7 @@ class CoverBackupPlugin(InterfaceAction):
     action_spec = ('Backup Cover(s)', None, "Create a backup of each book's cover", None)
     action_add_menu = True
     action_menu_clone_qaction = 'Backup Selected Cover(s)'
+    guiAboutToQuit = pyqtSignal()
     def genesis(self):
         # Read backup_path from prefs
         from calibre_plugins.cover_backup.config import prefs
@@ -33,6 +35,8 @@ class CoverBackupPlugin(InterfaceAction):
         # Create and connect restore action to start_restore()
         self.restore = self.create_menu_action(self.qaction.menu(),'smfincher.cover_restore', 'Restore Cover(s)',triggered=self.start_restore)
         # Connect configure action to configure()
+    def shutting_down(self):
+        self.guiAboutToQuit.emit()
     def __job_finished(self,j,ids,prev):
         print(f'Finished restoring {ids}')
         current = self.gui.library_view.currentIndex()
@@ -45,6 +49,7 @@ class CoverBackupPlugin(InterfaceAction):
         db = self.gui.current_db.new_api # Get current db
         print('t1:',int(QThread.currentThreadId()))
         session = backup_interactive(ids,db, self.backup_path, self.gui) # Create session object
+        self.guiAboutToQuit.connect(session.abort)
         session.destroyed.connect(self.db_session_destroyed) # Debug that ensured a session object is actually destroyed.
         job = ThreadedJob('cover_backup','Back up the covers of the selected books.',
             suppress(backup_interactive.process),
@@ -59,6 +64,7 @@ class CoverBackupPlugin(InterfaceAction):
         ids = self.gui.library_view.get_selected_ids()
         api = self.gui.current_db.new_api
         session = restore_noninteractive(db=api,ids=ids,ow_mode=False,backup_path=self.backup_path) 
+        self.guiAboutToQuit.connect(session.aborted)
         job = ThreadedJob('cover_backup','Back up the covers of the selected books.',
             suppress(restore_noninteractive.process),
             [session],

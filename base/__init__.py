@@ -4,6 +4,7 @@ import glob
 from os import PathLike,path,remove
 from calibre.library import db as db_api
 import logging
+import re
 '''
 Helper used to wrap log for testing.
 '''
@@ -43,9 +44,10 @@ class book_info:
 class BackupStatus(IntEnum):
     Initial = 0
     Pending = 1
-    Write = 3
-    Overwrite = 4
-    Skip = 5
+    Write = 2
+    Overwrite = 3
+    Skip = 4
+    Abort = 5
 
 @dataclass
 class BackupTask(book_info):
@@ -59,6 +61,23 @@ class BackupTask(book_info):
     def __post_init__(self):
         DN = f'{self.book_id}_{self.title}' if any(self.authors == a for a in ['','Unknown']) else f'{self.book_id}_{self.title} [{', '.join(self.authors)}]'
         self.backup_path = path.abspath(path.join(self.backup_path, DN + '.jpg'))
+    def make_new_path(self):
+        last_id = 0
+        matching_paths = []
+        # backup_path always has an extension, so we can use backup_path[:-4] to get prefix.
+        prefix = self.backup_path[:-4]
+        print("MATCH PREFIX:",prefix)
+        expr = re.compile(r"%s\.(?:(?P<num>\d+)\.)?jpg" % re.escape(prefix), flags=re.MULTILINE)
+        for p in self.ext_paths:
+            m = expr.match(p)
+            if m is None: continue
+            matching_paths.append(p)
+            if (nstr := m.groupdict()['num']) is not None:
+                num = int(nstr)
+                if num > last_id: last_id = num
+            # If first char after '.' is a number, nums group will be populated. add it to nums, then
+        if len(matching_paths) == 0: return self.backup_path
+        else: return f'{prefix}.{last_id + 1}.jpg'
 
 @dataclass
 class session_base:
@@ -86,10 +105,16 @@ class session_base:
         '''
         existing_paths = glob.glob(f'{book.book_id}_*.jpg',root_dir=self.backup_path)
         return len(existing_paths) > 0, [path.join(self.backup_path,p) for p in existing_paths]
-    def write_backup(self,book,path,existing=[]):
+    def write_backup(self,book,existing=[]):
+        print(f'Book Mode: {book.status}')
+        if book.status == BackupStatus.Write: book.backup_path = book.make_new_path()
+        print(f'Creating backup {book.backup_path}')
         self.db.copy_cover_to(book.book_id,book.backup_path)
-        for p in existing: 
-            remove(p)
+        if book.status == BackupStatus.Overwrite:
+            print(f'Removing {existing}')
+            for p in existing: remove(p)
+
+
     def restore_backup(self,book,paths):
         # Set the book cover
         with open(paths[0],'rb') as src: self.db.set_cover({book.book_id: src})

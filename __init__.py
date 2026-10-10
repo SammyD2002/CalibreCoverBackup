@@ -12,7 +12,7 @@ class DemoPlugin(InterfaceActionBase):
     description = 'Creates and restores backups of book cover images.'
     supported_platforms = ['windows', 'osx', 'linux']  # Platforms this plugin will run on
     author = 'Samuel Fincher'  # The author of this plugin
-    version = (1, 0, 0)  # The version number of this plugin
+    version = (0, 1, 0)  # The version number of this plugin
     minimum_calibre_version = (0, 7, 53)
     actual_plugin = 'calibre_plugins.cover_backup.interface:CoverBackupPlugin'
     def __print_metadata(self,api,i):
@@ -53,7 +53,7 @@ class DemoPlugin(InterfaceActionBase):
         return self.__class__.BackupStatus
 
     def cli_main(self,args):
-        parser = argp.ArgumentParser(prog='Cover Backup Plugin', description='Creates and restores book cover image backups.')
+        parser = argp.ArgumentParser(prog='Cover Backup Plugin', description='Creates and restores book cover image backups.',allow_abbrev=True)
         parser.add_argument('-l','--library',help='Path to library folder. Set to last used library by default', action='store', default=prefs.get("library_path"))
         parser.add_argument('-p', '--backup-path', help='Path where backups are stored', default=plugin_prefs['backup_path'])
         sp = parser.add_subparsers(help='subcommand help', dest='mode', metavar='{b[ackup],r[estore]}',required=True)
