@@ -34,51 +34,6 @@ def wrap_log(fn):
 		fn(*args,**kwargs)
 	return wrapper
 
-
-@dataclass
-class book_info:
-    book_id:int
-    title:str
-    authors:list[str]
-
-class BackupStatus(IntEnum):
-    Initial = 0
-    Pending = 1
-    Write = 2
-    Overwrite = 3
-    Skip = 4
-    Abort = 5
-
-@dataclass
-class BackupTask(book_info):
-    # The target path
-    backup_path: PathLike
-    # Detected paths containing existing backups. Can be set later
-    ext_paths: list[PathLike] = field(default_factory=list)
-    # Task Status
-    status: BackupStatus = BackupStatus.Initial
-    unique: bool = True
-    def __post_init__(self):
-        DN = f'{self.book_id}_{self.title}' if any(self.authors == a for a in ['','Unknown']) else f'{self.book_id}_{self.title} [{', '.join(self.authors)}]'
-        self.backup_path = path.abspath(path.join(self.backup_path, DN + '.jpg'))
-    def make_new_path(self):
-        last_id = 0
-        matching_paths = []
-        # backup_path always has an extension, so we can use backup_path[:-4] to get prefix.
-        prefix = self.backup_path[:-4]
-        print("MATCH PREFIX:",prefix)
-        expr = re.compile(r"%s\.(?:(?P<num>\d+)\.)?jpg" % re.escape(prefix), flags=re.MULTILINE)
-        for p in self.ext_paths:
-            m = expr.match(p)
-            if m is None: continue
-            matching_paths.append(p)
-            if (nstr := m.groupdict()['num']) is not None:
-                num = int(nstr)
-                if num > last_id: last_id = num
-            # If first char after '.' is a number, nums group will be populated. add it to nums, then
-        if len(matching_paths) == 0: return self.backup_path
-        else: return f'{prefix}.{last_id + 1}.jpg'
-
 @dataclass
 class session_base:
     # Actual session info

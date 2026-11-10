@@ -1,4 +1,5 @@
 from calibre_plugins.cover_backup.base import book_info,BackupStatus,BackupTask,session_base
+from calibre_plugins.cover_backup.base.backup import OverwriteMode as GlobalChoice
 from calibre_plugins.cover_backup.ui.cover_dialog import BookCoverItemModel,CoverDataRole,BookCoverItem,CoverListView,PreviewWidget,StyledBookCoverDelegate,prepareCoverWidgets,swapViewerModel
 from qt.core import (Qt,QCheckBox,QWidget,QComboBox,QHBoxLayout,QDialog,QDialogButtonBox,QPushButton,QVBoxLayout,QLabel,QButtonGroup,pyqtSignal)
 from enum import IntEnum
@@ -11,11 +12,6 @@ class ResolutionChoice(IntEnum):
     Create = 2
     Overwrite = 3
 ''' 
-class GlobalChoice(IntEnum):
-    NoGlobal = 1
-    Single = 2
-    Multi = 3
-    All = 4
 
 @dataclass
 class ConflictChoice:

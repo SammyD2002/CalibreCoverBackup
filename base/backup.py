@@ -1,8 +1,26 @@
 from dataclasses import dataclass
 from typing import override
 from calibre_plugins.cover_backup.base import session_base,wrap_log
+from .book import BookBase
+from .backup_result import BackupResult,BackupStatus
 from os import path,remove
 from sys import stdout
+from enum import IntEnum
+
+class OverwriteMode(IntEnum):
+    NoGlobal = 1
+    Single = 2
+    Multi = 3
+    All = 4
+
+@dataclass
+class BackupTask:
+    book: BookBase
+    status: BackupStatus
+    @property
+    def result_summary(self):
+        return BackupResult.StatusResult[self.status](self)
+
 @dataclass
 class session_backup(session_base):
 	@override
@@ -18,7 +36,25 @@ class session_backup(session_base):
 			log.info(msg)
 		else: log.info(f'\t\tNo existing backup(s) were found.')
 		return (self.ow_mode or not cfl),[p for p in paths if path.abspath(p) != book.backup_path]
-			
+
+class session_backup(WorkerMixin):
+    def __init__(self, *args,**kwargs):
+        super().__init__(*args,**kwargs)
+        
+    @override
+    def do_book(self,book_id):
+        '''
+        Process book <book_id>.
+        '''
+        raise NotImplementedError()
+    @override
+    def summarize_results(self):
+        '''
+        Returns string containing result summary.
+        Implement in subclass
+        '''
+        raise NotImplementedError()
+
 
 @dataclass
 class backup_noninteractive(session_backup):

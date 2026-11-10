@@ -3,7 +3,8 @@ from calibre.customize import InterfaceActionBase
 from calibre.utils.config import prefs
 from calibre.library import db,current_library_path
 from calibre_plugins.cover_backup.config import prefs as plugin_prefs
-from calibre_plugins.cover_backup.base.backup import backup_noninteractive
+from calibre_plugins.cover_backup.base.backup import backup_noninteractive,OverwriteMode
+from calibre_plugins.cover_backup.base.book import BookClassFactory,BookBase
 from calibre_plugins.cover_backup.base.restore import restore_noninteractive
 from os import path
 import argparse as argp
@@ -62,7 +63,10 @@ class DemoPlugin(InterfaceActionBase):
         restore = sp.add_parser('restore',aliases=make_aliases('restore'),help='backup help')
         parser.add_argument('ids',help='The ID(s) of books we are operating on.', type=int, action='extend',nargs=1)
         #parser.add_argument('mode',help='Create or Restore Backup(s)',choices=['backup','restore'])
-        backup.add_argument('-o', '--overwrite', help='Overwrite existing backups instead of skipping them.', action='store_true',dest='ow_mode')
+        backup.add_argument('-o', '--overwrite-single', help='Overwrite the existing backup of book(s) with one existing backup instead of skipping them.', action='store_true')
+        backup.add_argument('--overwrite-multi', help='Overwrite ALL existing backups of book(s) with multiple existing backups instead of skipping them.', action='store_true')
+        # Equivalent to -o and --overwrite-multi
+        backup.add_argument('-O', '--overwrite-all', help='Overwrite ALL existing backups of book(s) with any number of backups instead of skipping them.', action='store_true')
         restore.add_argument('-d','--delete',help='Delete backups after they are restored.', action='store_true',dest='ow_mode')
         backup.add_argument('ids',help='The ID(s) of books we are creating backup(s) for.', type=int, action='extend',nargs='+',metavar=('id','ids'))
         restore.add_argument('ids',help='The ID(s) of books we are restoring backup(s) for.', type=int, action='extend',nargs='+',metavar=('id','ids'))
@@ -74,6 +78,12 @@ class DemoPlugin(InterfaceActionBase):
         #print(api)
         api.init()
         api.reload_from_db()
+        ow_mode = OverwriteMode.NoGlobal
+        if argv.overwrite_all: ow_mode = OverwriteMode.All
+        else:
+            if argv.overwrite_single: ow_mode = OverwriteMode.Single
+            if argv.overwrite_multi: ow_mode = OverwriteMode.Multi
+        Book = BookClassFactory(BookBase,api,argv.backup_path)
         cs = backup_noninteractive if argv.mode == 'backup' else restore_noninteractive
         s = cs(db=api,ids=argv.ids,ow_mode=argv.ow_mode,backup_path=argv.backup_path) 
         cs.process(s)
