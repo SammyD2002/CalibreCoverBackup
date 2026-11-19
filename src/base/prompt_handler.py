@@ -1,5 +1,5 @@
 from calibre_plugins.cover_backup.base import BackupStatus,Resolution,ABORT
-from calibre_plugins.cover_backup.base.backup import BackupResolution,BackupResult
+#from calibre_plugins.cover_backup.base.backup import BackupResolution,BackupResult
 from calibre_plugins.cover_backup.ui import LogPrefixWrapper
 from calibre.utils.logging import GUILog
 from qt.core import (Qt,QObject,pyqtSignal)

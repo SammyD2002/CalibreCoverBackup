@@ -1,11 +1,12 @@
 from calibre.gui2.actions import InterfaceAction
-from calibre_plugins.cover_backup.ui.backup import ui_backup
-from calibre_plugins.cover_backup.ui.backup import execute_session as exc_backup_session
+#from calibre_plugins.cover_backup.ui.backup import ui_backup
+#from calibre_plugins.cover_backup.ui.backup import execute_session as exc_backup_session
+import calibre_plugins.cover_backup.backup.interface as action_backup
 from calibre_plugins.cover_backup.ui import QBookBase
-from calibre_plugins.cover_backup.ui.backup_resolver import DummyPrompt,DummyHandler,BackupPromptHandler
+from calibre_plugins.cover_backup.backup.resolver import DummyPrompt,DummyHandler,BackupPromptHandler
 from calibre_plugins.cover_backup.base.book import BookClassFactory
 from calibre_plugins.cover_backup.base import Resolution,BackupStatus
-from calibre_plugins.cover_backup.base.backup import BackupResolution,BackupResult
+from calibre_plugins.cover_backup.backup import BackupResolution,BackupResult
 #from calibre_plugins.cover_backup.base.restore import restore_noninteractive
 from calibre.gui2.threaded_jobs import ThreadedJob
 from qt.core import (pyqtSignal)
@@ -60,7 +61,7 @@ class CoverBackupPlugin(InterfaceAction):
         session.destroyed.connect(self.db_session_destroyed) # Debug that ensured a session object is actually destroyed.
         '''
         job = ThreadedJob('cover_backup','Back up the covers of the selected books.',
-            suppress(exc_backup_session),
+            suppress(action_backup.execute_session),
             #[ids,BookClassFactory(QBookBase,db,self.backup_path),[BackupResolution(Resolution.Scope.All,BackupStatus.Skip)]],
             [ids,BookClassFactory(QBookBase,db,self.backup_path),[]],
             dict(), lambda j:j) # Create job object

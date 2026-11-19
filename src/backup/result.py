@@ -1,7 +1,7 @@
 from enum import IntEnum
 from typing import override
 from os import path
-from . import BackupStatus,Result
+from ..base import BackupStatus,Result
 
 class BackupResult(Result):
     def __init_subclass__(cls, status: BackupStatus, **kwargs):

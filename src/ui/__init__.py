@@ -69,8 +69,8 @@ class LogPrefixWrapper(UnsafeLogWrapper,GUILog):
         else: self._interval = None
         self.prefix = prefix
     def __prepare_args(self,args):
-        print('length of args:', len(args))
-        print('\t',args)
+        #print('length of args:', len(args))
+        #print('\t',args)
         #print('length of kwargs:',len(kwargs))
         #print('\t',kwargs)
         return args[:1] + self.prefix + args[1:]

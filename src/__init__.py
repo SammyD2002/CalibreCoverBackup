@@ -5,9 +5,9 @@ from calibre.utils.config import prefs
 from calibre.library import db,current_library_path
 from calibre_plugins.cover_backup.config import prefs as plugin_prefs
 from calibre_plugins.cover_backup.base import BackupStatus,Resolution
-from calibre_plugins.cover_backup.base.backup import session_backup,BackupResolution
+from calibre_plugins.cover_backup.backup import session_backup,BackupResolution
 from calibre_plugins.cover_backup.base.book import BookClassFactory,BookBase
-from calibre_plugins.cover_backup.base.restore import session_restore
+from calibre_plugins.cover_backup.restore import session_restore
 from typing import override
 import argparse as argp
 from os import path
@@ -162,7 +162,8 @@ class DemoPlugin(InterfaceActionBase):
         else:
             session = session_restore(argv.br_mode,Book)
         for b in argv.ids:
-            session.do_book(b)
+            t = session.do_book(b)
+            print(t.result_summary.summarize_full())
         session.summarize_results()
         #cs = backup_noninteractive if argv.mode == 'backup' else restore_noninteractive
         #s = cs(db=api,ids=argv.ids,ow_mode=argv.ow_mode,backup_path=argv.backup_path) 

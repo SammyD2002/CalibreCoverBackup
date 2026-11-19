@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import override
 from calibre_plugins.cover_backup.base import session_base,wrap_log,RestoreStatus
-from calibre_plugins.cover_backup.base.restore_result import RestoreResult
-from .book import BookBase
+from calibre_plugins.cover_backup.restore.result import RestoreResult
+from calibre_plugins.cover_backup.base.book import BookBase
 from os import path
 from sys import stdout
 import logging
@@ -51,6 +51,7 @@ class session_restore(session_base):
             t.r_path = t.book.restore_cover()
             self.restored.append(t)
         else: self.skipped.append(t)
+        return t
 
     @override
     def summarize_results(self):

@@ -1,6 +1,6 @@
 from typing import override
 from os import path
-from . import Result,RestoreStatus
+from ..base import Result,RestoreStatus
 # Possible Outcomes: Do not restore (no book), Do not restore (multiple candidates), Restore (retain backups), Restore (remove backups)
 
 class RestoreResult(Result):

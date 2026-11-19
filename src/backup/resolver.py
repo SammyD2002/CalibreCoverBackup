@@ -1,10 +1,10 @@
 from calibre_plugins.cover_backup.base import BackupStatus,Resolution
-from calibre_plugins.cover_backup.base.backup import BackupResolution,BackupResult
-from calibre_plugins.cover_backup.ui.prompt_handler import prompt_handler
+from calibre_plugins.cover_backup.backup import BackupResolution,BackupResult
+from calibre_plugins.cover_backup.base.prompt_handler import prompt_handler
 from calibre_plugins.cover_backup.ui import ActionButtonMixin,CustomPushButton
+from calibre_plugins.cover_backup.ui.cover_dialog import CoverListView,PreviewWidget,prepareCoverWidgets,swapViewerModel,CoverSelectDialog
 from typing import override
 from queue import Queue,Empty,ShutDown
-from calibre_plugins.cover_backup.ui.cover_dialog import CoverListView,PreviewWidget,prepareCoverWidgets,swapViewerModel,CoverSelectDialog
 from qt.core import (Qt,QObject,QWidget,QCheckBox,QComboBox,QDialog,QDialogButtonBox,QPushButton,QHBoxLayout,QVBoxLayout,QLabel,QButtonGroup,pyqtSignal,QSizePolicy)
 # Test prompt and handler. Will always skip backups with conflicts.
 class DummyPrompt(QObject):
