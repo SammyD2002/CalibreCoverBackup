@@ -1,5 +1,5 @@
 from qt.core import QTreeView ,QApplication,QGridLayout,QLabel,QMainWindow,QWidget,QSizeF,QButtonGroup,QRadioButton,QHeaderView,QHBoxLayout,QVBoxLayout,QDialog, QBoxLayout,QSizePolicy,QPixmap,QIcon,QPainter,pyqtSignal,QSize,Qt
-from calibre_plugins.cover_backup.ui.cover_dialog.cover_model import BookCoverItem,BookCoverItemModel,StyledBookCoverDelegate
+from calibre_plugins.cover_backup.ui.cover_dialog.cover_model import BookCoverItem,BookCoverItemModel
 from sys import argv
 from typing import override
 from dataclasses import dataclass,field
@@ -15,7 +15,7 @@ class LabeledImage(QWidget):
             self.setScaledContents(False)
         def scaledPixmap(self):
             if self.pm.isNull(): return self.pm
-            return self.pm.scaled(self.size(),Qt.AspectRatioMode.KeepAspectRatio)
+            return self.pm.scaled(self.size(),Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)
         @override
         def resizeEvent(self,event):
             if not self.pm.isNull(): super().setPixmap(self.scaledPixmap())
@@ -51,7 +51,7 @@ class LabeledImage(QWidget):
 class PreviewWidget(QWidget):
     def __init__(self, parent=None):
         QWidget.__init__(self,parent)
-        self.setLayout(layout := QBoxLayout(QBoxLayout.Direction.TopToBottom))
+        self.setLayout(layout := QBoxLayout(QBoxLayout.Direction.LeftToRight))
         self.__ccover = LabeledImage("Current Cover Image",self)
         layout.addWidget(self.__ccover)
         self.__bcover = LabeledImage("Selected Backup Image",self)

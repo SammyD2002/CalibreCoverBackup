@@ -1,14 +1,7 @@
 from enum import IntEnum
 from typing import override
 from os import path
-from .session import Result
-class BackupStatus(IntEnum):
-    Initial = 0
-    Pending = 1
-    Write = 2
-    Overwrite = 3
-    Skip = 4
-    Abort = 5
+from . import BackupStatus,Result
 
 class BackupResult(Result):
     def __init_subclass__(cls, status: BackupStatus, **kwargs):
@@ -22,7 +15,7 @@ class BackupResult(Result):
 BackupResult.StatusResult = dict()
 
 class UnprocessedBase(BackupResult, status=BackupStatus.Initial):    
-    def __init__(self,book,changed=False):
+    def __init__(self,book,changed=False,**kwargs):
         super().__init__(book,changed)
 
 class ProcessedBase(UnprocessedBase, status=BackupStatus.Pending):
@@ -52,7 +45,7 @@ Aborted Format:
     SHORT: <TITLE> [ID]: ABORTED
 '''
 class Aborted(UnprocessedBase, status=BackupStatus.Abort):
-    def __init__(self,book):
+    def __init__(self,book,**kwargs):
         super().__init__(book)
     @override
     def summarize_full(self):
@@ -71,7 +64,7 @@ LONG:
 SHORT: <TITLE> [ID]: KEPT '<ext_1>','<ext_2>',...
 '''
 class Skipped(ProcessedBase, status=BackupStatus.Skip):
-    def __init__(self,book):
+    def __init__(self,book,**kwargs):
         super().__init__(book,False)
     @ProcessedBase.long_header.getter
     def long_header(self):
@@ -92,7 +85,7 @@ SHORT: <TITLE> [ID]: WROTE <BASENAME>, KEPT '<ext_1>','<ext_2>',...
 SHORT V2: <TITLE> [ID]: WROTE <BASENAME>
 '''
 class Written(ProcessedBase, status=BackupStatus.Write):
-    def __init__(self,book,wpath=None):
+    def __init__(self,book,wpath=None,**kwargs):
         super().__init__(book,True)
         self.location = wpath if wpath is not None else book.unique_path
     @ProcessedBase.long_header.getter
@@ -120,9 +113,9 @@ SHORT V1: <TITLE> [ID]: WROTE <BASENAME>, REPLACED '<rm_1>','<rm_2>',..., KEPT '
 SHORT V2: <TITLE> [ID]: WROTE <BASENAME>, REPLACED '<rm_1>','<rm_2>',...
 '''
 class Overwritten(Written, status=BackupStatus.Overwrite):
-    def __init__(self,book,wpath,removed):
+    def __init__(self,book,*,wpath,removed):
         super().__init__(book,wpath)
-        self.existing.remove(wpath)
+        if wpath in self.existing: self.existing.remove(wpath)
         self.removed = set(p for p in removed if p != wpath)
         self.existing -= self.removed
         

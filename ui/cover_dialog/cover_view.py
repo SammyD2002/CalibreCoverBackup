@@ -1,45 +1,40 @@
-from qt.core import pyqtSignal,QSize,Qt,QTreeView ,QApplication,QGridLayout,QLabel,QMainWindow,QWidget,QButtonGroup,QRadioButton,QHeaderView,QHBoxLayout,QVBoxLayout,QDialog, QBoxLayout,QSizePolicy,QPixmap,QIcon,QPainter
-from calibre_plugins.cover_backup.base import book_info,BackupStatus,BackupTask
-from calibre_plugins.cover_backup.ui.cover_dialog import BookCoverItem,BookCoverItemModel,StyledBookCoverDelegate
+from qt.core import (pyqtSignal,QSize,Qt,QTreeView,QApplication,QGridLayout,QLabel,QMainWindow,QWidget,QButtonGroup,
+                    QRadioButton,QHeaderView,QHBoxLayout,QVBoxLayout,QDialog,QBoxLayout,QSizePolicy,QPixmap,QIcon,QPainter)
+#from calibre_plugins.cover_backup.base import book_info,BackupStatus,BackupTask
+from calibre_plugins.cover_backup.ui.cover_dialog import BookCoverItem,BookCoverItemModel,CheckProxyModel
 from sys import argv
 from typing import override
 from dataclasses import dataclass,field
 from enum import IntEnum
 from os import path,PathLike
-
-@dataclass
-class PromptResult:
-    result: QDialogButtonBox.ButtonRole
-    image:tuple(PathLike,QImage)
-    other_paths:list[PathLike]
-    rm_others:bool
-    @property
-    def selected(self):
-        return self.result == QDialogButtonBox.ButtonRole.AcceptRole
-    @property
-    def skipped(self):
-        return self.result == QDialogButtonBox.ButtonRole.DestructiveRole
-    @property
-    def cancelled(self):
-        return self.result == QDialogButtonBox.ButtonRole.RejectRole
-
 class CoverListView(QTreeView):
     coverChanged = pyqtSignal(QSize,QPixmap)
     rootCoverChanged = pyqtSignal(QSize,QPixmap)
     def __init__(self,pw,parent=None):
         QTreeView.__init__(self,parent)
+        '''
+        New behavoir: Select on double-click or checkbox pressed, preview on selectionChanged.
+        '''
         self.preview_widget = pw
-        #self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Preferred)
         self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Expanding)
         self.setRootIsDecorated(False)
-        #print('MODEL:',self.model())
-        #self.buttons = QButtonGroup()
-        #self.header().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-    def __set_index_checked(self, index, checked):
-        if index is None: print('Index passed was None. Skipping...')
-        elif not index.isValid(): print("Current is invalid")
-        elif index.model() is None: print("Current model is None!")
-        else: self.model().setData(index,Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked, Qt.ItemDataRole.CheckStateRole)
+        self.doubleClicked.connect(self.toggleIndex)
+    def __index_issue(self,index):
+        # Returns int depending on the issue at hand.
+        if index is None: return 1
+        elif not index.isValid(): return 2
+        elif index.model() is None: return 3
+        else: return 0
+    def __print_index_issue(self,code,index,prefix='Specified Index'):
+        match(code):
+            case 1: print(prefix,'was None. Skipping...')
+            case 2: print(prefix,"is invalid")
+            case 3: print(prefix," had model of None!")
+    def toggleIndex(self,index):
+        if (iss := self.__index_issue(index)) == 0:
+            if index.data(Qt.ItemDataRole.CheckStateRole) == Qt.CheckState.Unchecked: self.model().setData(index,Qt.CheckState.Checked,Qt.ItemDataRole.CheckStateRole)
+            else: self.model().setData(index,Qt.CheckState.Unchecked,Qt.ItemDataRole.CheckStateRole)
+        else: self.__print_index_issue(iss,index,'Index passed to toggleIndex')
     def clearModel(self):
         model = self.model()
         index = self.currentIndex()
@@ -57,47 +52,34 @@ class CoverListView(QTreeView):
             print(f'Child {r}: {model.itemData(ch.index())}')
             others.append(ch.data(CoverDataRole.PathRole))
             ch.clearData()
-            print('Path Check:',ch.data(CoverDataRole.PathRole))
-            print('Size Check:',ch.data(CoverDataRole.SizeRole))
-        #print(root.rowCount())
         model.clear()
-        model.deleteLater()
-        
+        model.deleteLater()    
+
+    def selectedPaths(self):
+        r = self.model().sourceModel().item(0)
+        paths = []
+        if r.hasChildren():
+            #print(f'root has {r.rowCount()} Children')
+            for ci in range(r.rowCount()):
+                c = r.child(ci)
+                if c is not None and Qt.CheckState(c.checkState()) == Qt.CheckState.Checked:
+                    paths.append(c.cover_path)
+        return paths
+ 
     @override
     def currentChanged(self, current, previous):
-        self.__set_index_checked(current,True)
-        self.__set_index_checked(previous,False)
-        if current is None: print('Current is None.')
-        elif not current.isValid(): print("Current is invalid")
-        elif current.model() is None: print("Current model is None!")
-        else:
+        if (iss := self.__index_issue(current)) == 0:
             m = current.model()
             #print(f'Creating thumbnail(s) for {parent_size}...')
             signal = self.coverChanged if current.parent().isValid() else self.rootCoverChanged
-                #print(f"Loading thumbnail for child at row {current.row()} to parent row {current.parent().row()}")
+            #print(f"Loading thumbnail for child at row {current.row()} to parent row {current.parent().row()}")
             s, pm = BookCoverItemModel.loadCover(m, current)
             signal.emit(s,pm.pixmap(s))
+        elif iss != 2: self.__print_index_issue(iss,current,'currentChanged arg for current index')
         super().currentChanged(current,previous)
-            #current = current.siblingAtColumn(0)
-            #button = current.siblingAtColumn(1)
-            #w = self.indexWidget(button)
-            #w.setChecked(True)
-            ##print(w.text())
+
     @override
     def rowsInserted(self,pindex,start,end):
-        if pindex.isValid(): print(f"Added child at row {start} to parent row {pindex.row()}")
-        else: print(f"Added non-child at row {start}")
         self.resizeColumnToContents(1)
         super().rowsInserted(pindex,start,end)
-
-    '''
-    @override
-    def rowsInserted(self,pindex,start,end):
-        for i in range(start,end+1):
-            b = QRadioButton('')
-            self.buttons.addButton(b)
-            self.setIndexWidget(self.model().index(i,1,pindex),b)
-            self.resizeColumnToContents(1)
-            self.resizeColumnToContents(2)
-    ''' 
 

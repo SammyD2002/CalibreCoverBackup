@@ -4,12 +4,7 @@ from os import PathLike,path,remove
 from calibre.library import db as db_api
 import logging
 import re
-
-
-'''
-Initializes and returns Book class using db and backup_dir.
-'''
-class BookBase:
+class BookTemplate:
     '''
     # The target path
     backup_path: PathLike
@@ -24,19 +19,10 @@ class BookBase:
     _tfield = None
     _afield = None
     _dir : str|None = None
-    def __init_subclass__(cls, **kwargs):
-        '''
-        Prevent creation of subclass without _db, and _dir; initialize _tfield and _afield.
-        ''' 
-        assert (db := cls._db) is not None
-        assert (cls._dir is not None)
-        cls._tfield = db.fields['title']
-        cls._afield = db.fields['authors']
-        super().__init_subclass__(**kwargs)
 
     def __init__(self,book_id):
         self.book_id = book_id
-        self.__title = self.__authors = self.__ccover = self.__ext_paths = None
+        self.__title = self.__authors = self.__cover = self.__ext_paths = None
 
     @property
     def title(self)->str:
@@ -96,8 +82,16 @@ class BookBase:
         '''
         Reads QPixmap of currently set book cover. Used in preview widget(s)
         '''
-        if (v := self.__cover) is None: self.__cover = v = self._db.cover(self.book_id, as_pixmap=True)
-        return v
+        try:
+            if (v := self.__cover) is None: 
+                #print('__cover is None, loading from file...')
+                self.__cover = v = self._db.cover(self.book_id, as_pixmap=True)
+            #else: print('__cover was not none, using it...')
+            return v
+        except Exception as e:
+            print(f'Caught some error {e}')
+            print(f'Type: {type(e)}')
+            raise
 
     def write_cover(self,bpath=None):
         '''
@@ -126,12 +120,29 @@ class BookBase:
             if (bp := self.base_path) not in paths: paths.insert(0,bp)
             for p in paths:                    
                 try:
-                    with open(rpath,'rb') as cf:
+                    with open(p,'rb') as cf:
                         self._db.set_cover({self.book_id: cf})
                 except FileNotFoundError:
                     if p != paths[-1]: continue
                     else: raise
                 return p
 
+
+class BookBase(BookTemplate):
+    def __init_subclass__(cls, **kwargs):
+        '''
+        Prevent creation of subclass without _db, and _dir; initialize _tfield and _afield.
+        ''' 
+        assert (db := cls._db) is not None
+        assert (cls._dir is not None)
+        cls._tfield = db.fields['title']
+        cls._afield = db.fields['authors']
+        super().__init_subclass__(**kwargs)
+
+
+
+'''
+Initializes and returns Book class using db and backup_dir.
+'''
 def BookClassFactory(basecls, db, backup_dir):
     return type('Book',(basecls,),{'_db': db, '_dir': backup_dir})
